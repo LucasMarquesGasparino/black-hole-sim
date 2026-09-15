@@ -1,0 +1,571 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Simulacao visual de buraco negro</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --panel: rgba(5, 8, 14, 0.62);
+      --line: rgba(255, 255, 255, 0.12);
+      --text: rgba(248, 250, 252, 0.92);
+      --muted: rgba(203, 213, 225, 0.68);
+      --accent: #f8c471;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: #02030a;
+      color: var(--text);
+    }
+
+    canvas {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      background: #02030a;
+    }
+
+    .vignette {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(circle at 50% 48%, transparent 0 36%, rgba(0, 0, 0, 0.18) 60%, rgba(0, 0, 0, 0.72) 100%),
+        linear-gradient(180deg, rgba(0, 0, 0, 0.18), transparent 34%, rgba(0, 0, 0, 0.34));
+      mix-blend-mode: multiply;
+    }
+
+    .hud {
+      position: fixed;
+      top: 18px;
+      left: 18px;
+      width: min(338px, calc(100vw - 36px));
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      backdrop-filter: blur(18px);
+      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.42);
+    }
+
+    .title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 15px;
+      line-height: 1.1;
+      font-weight: 680;
+      letter-spacing: 0;
+    }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 99px;
+      background: var(--accent);
+      box-shadow: 0 0 14px var(--accent);
+    }
+
+    .controls {
+      display: grid;
+      gap: 12px;
+    }
+
+    label {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    output {
+      min-width: 42px;
+      text-align: right;
+      color: var(--text);
+      font-variant-numeric: tabular-nums;
+    }
+
+    input[type="range"] {
+      grid-column: 1 / -1;
+      width: 100%;
+      accent-color: var(--accent);
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    button {
+      height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text);
+      font: inherit;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    button:first-child {
+      flex: 1;
+    }
+
+    button:last-child {
+      width: 42px;
+      font-size: 16px;
+    }
+
+    button:hover {
+      background: rgba(255, 255, 255, 0.13);
+    }
+
+    .readout {
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      width: min(300px, calc(100vw - 36px));
+      color: rgba(226, 232, 240, 0.72);
+      font-size: 12px;
+      line-height: 1.55;
+      text-align: right;
+      text-shadow: 0 2px 18px rgba(0, 0, 0, 0.7);
+      pointer-events: none;
+    }
+
+    @media (max-width: 680px) {
+      .hud {
+        top: 10px;
+        left: 10px;
+        right: 10px;
+        width: auto;
+        padding: 12px;
+      }
+
+      .controls {
+        grid-template-columns: 1fr 1fr;
+        gap: 10px 12px;
+      }
+
+      label {
+        min-width: 0;
+      }
+
+      .actions {
+        margin-top: 10px;
+      }
+
+      .readout {
+        right: 12px;
+        bottom: 12px;
+        width: min(260px, calc(100vw - 24px));
+        font-size: 11px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="scene" aria-label="Simulacao visual de um buraco negro com disco de acrecao"></canvas>
+  <div class="vignette"></div>
+
+  <section class="hud" aria-label="Controles da simulacao">
+    <div class="title">
+      <h1>Buraco negro visual</h1>
+      <div class="status"><span class="dot"></span><span id="fps">60 fps</span></div>
+    </div>
+
+    <div class="controls">
+      <label>
+        Massa visual
+        <output id="massValue">1.18</output>
+        <input id="mass" type="range" min="0.75" max="1.7" step="0.01" value="1.18">
+      </label>
+
+      <label>
+        Rotacao
+        <output id="spinValue">0.72</output>
+        <input id="spin" type="range" min="0" max="1" step="0.01" value="0.72">
+      </label>
+
+      <label>
+        Inclinacao
+        <output id="tiltValue">0.68</output>
+        <input id="tilt" type="range" min="0.2" max="0.95" step="0.01" value="0.68">
+      </label>
+
+      <label>
+        Brilho do disco
+        <output id="brightnessValue">1.20</output>
+        <input id="brightness" type="range" min="0.55" max="1.8" step="0.01" value="1.2">
+      </label>
+    </div>
+
+    <div class="actions">
+      <button id="cinematic" type="button">Modo cinematico</button>
+      <button id="pause" type="button" aria-label="Pausar ou tocar">II</button>
+    </div>
+  </section>
+
+  <aside class="readout">
+    Lente gravitacional estilizada, sombra central, anel de fotons e disco de acrecao com brilho Doppler.
+  </aside>
+
+  <script>
+    const canvas = document.getElementById("scene");
+    const gl = canvas.getContext("webgl", {
+      antialias: false,
+      depth: false,
+      stencil: false,
+      alpha: false,
+      preserveDrawingBuffer: false
+    });
+
+    if (!gl) {
+      document.body.innerHTML = "<p style=\"padding:24px;font:16px system-ui;color:white\">WebGL nao esta disponivel neste navegador.</p>";
+      throw new Error("WebGL unavailable");
+    }
+
+    const vertexSource = `
+      attribute vec2 position;
+      varying vec2 vUv;
+      void main() {
+        vUv = position * 0.5 + 0.5;
+        gl_Position = vec4(position, 0.0, 1.0);
+      }
+    `;
+
+    const fragmentSource = `
+      precision highp float;
+
+      varying vec2 vUv;
+      uniform vec2 uResolution;
+      uniform vec2 uPointer;
+      uniform float uTime;
+      uniform float uMass;
+      uniform float uSpin;
+      uniform float uTilt;
+      uniform float uBrightness;
+
+      #define PI 3.14159265359
+
+      mat2 rotate2d(float angle) {
+        float s = sin(angle);
+        float c = cos(angle);
+        return mat2(c, -s, s, c);
+      }
+
+      float hash(vec2 p) {
+        p = fract(p * vec2(123.34, 456.21));
+        p += dot(p, p + 45.32);
+        return fract(p.x * p.y);
+      }
+
+      float noise(vec2 p) {
+        vec2 i = floor(p);
+        vec2 f = fract(p);
+        vec2 u = f * f * (3.0 - 2.0 * f);
+        return mix(
+          mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x),
+          mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x),
+          u.y
+        );
+      }
+
+      float fbm(vec2 p) {
+        float value = 0.0;
+        float amp = 0.5;
+        for (int i = 0; i < 5; i++) {
+          value += amp * noise(p);
+          p = rotate2d(0.74) * p * 2.04 + 17.3;
+          amp *= 0.5;
+        }
+        return value;
+      }
+
+      vec3 palette(float t) {
+        vec3 deepRed = vec3(0.95, 0.16, 0.05);
+        vec3 amber = vec3(1.0, 0.55, 0.12);
+        vec3 whiteHot = vec3(1.0, 0.88, 0.62);
+        vec3 blueWhite = vec3(0.68, 0.82, 1.0);
+        vec3 color = mix(deepRed, amber, smoothstep(0.0, 0.45, t));
+        color = mix(color, whiteHot, smoothstep(0.35, 0.78, t));
+        color = mix(color, blueWhite, smoothstep(0.82, 1.0, t));
+        return color;
+      }
+
+      vec3 starField(vec2 p, float lens) {
+        vec2 cell = floor(p * 95.0);
+        vec2 local = fract(p * 95.0) - 0.5;
+        float seed = hash(cell);
+        float size = mix(0.024, 0.006, seed);
+        float star = smoothstep(size, 0.0, length(local));
+        star *= step(0.986, seed);
+        star *= mix(0.45, 1.7, hash(cell + 9.13));
+
+        float dust = pow(fbm(p * 2.4 + vec2(4.0, -2.0)), 3.0) * 0.09;
+        vec3 tint = mix(vec3(0.52, 0.64, 0.9), vec3(1.0, 0.82, 0.62), hash(cell + 4.1));
+        return tint * star * (1.0 + lens * 2.2) + vec3(0.035, 0.045, 0.07) * dust;
+      }
+
+      float ringBand(float radius, float center, float width) {
+        return exp(-pow(abs(radius - center) / width, 2.0));
+      }
+
+      vec3 accretionDisk(vec2 p, float radius, float angle) {
+        float tilt = mix(0.22, 0.56, uTilt);
+        vec2 diskPoint = vec2(p.x, p.y / tilt);
+        float diskRadius = length(diskPoint);
+        float diskAngle = atan(diskPoint.y, diskPoint.x);
+
+        float inner = smoothstep(0.34 * uMass, 0.52 * uMass, diskRadius);
+        float outer = 1.0 - smoothstep(1.45 * uMass, 2.55 * uMass, diskRadius);
+        float band = exp(-pow(abs(p.y) / (0.065 + 0.025 * uTilt), 1.45));
+        float orbit = inner * outer * band;
+
+        float turbulent = fbm(vec2(diskAngle * 3.6 + uTime * (0.32 + uSpin * 0.55), diskRadius * 8.0));
+        float streaks = smoothstep(0.2, 1.0, turbulent);
+        float heat = 1.0 - smoothstep(0.42, 2.25, diskRadius);
+        float doppler = 0.62 + 0.58 * sin(diskAngle + 1.35) * uSpin;
+        float density = orbit * (0.62 + 0.7 * streaks) * doppler;
+
+        vec3 color = palette(clamp(heat + doppler * 0.25 + streaks * 0.18, 0.0, 1.0));
+        color *= density * uBrightness * 2.15;
+
+        float backArcY = abs(p.y + 0.25 / (radius + 0.18));
+        float backArc = exp(-pow(backArcY / (0.055 + 0.025 * uTilt), 1.55));
+        backArc *= smoothstep(0.37 * uMass, 0.72 * uMass, radius);
+        backArc *= 1.0 - smoothstep(1.65 * uMass, 2.8 * uMass, radius);
+        backArc *= smoothstep(-0.12, 0.28, p.y);
+        vec3 arcColor = palette(0.62 + 0.24 * sin(angle * 5.0 + uTime));
+        color += arcColor * backArc * uBrightness * 1.35;
+
+        return color;
+      }
+
+      void main() {
+        vec2 uv = vUv * 2.0 - 1.0;
+        uv.x *= uResolution.x / uResolution.y;
+        uv += uPointer * vec2(0.075, -0.045);
+
+        float time = uTime * 0.16;
+        vec2 p = rotate2d(0.02 * sin(time)) * uv;
+        float radius = length(p);
+        float angle = atan(p.y, p.x);
+
+        float horizon = 0.34 * uMass;
+        float photon = horizon * 1.22;
+        float lensForce = uMass / (radius * radius + 0.08);
+        vec2 bent = p + normalize(p + 0.0001) * lensForce * 0.19;
+        bent = rotate2d(uSpin * 0.32 / (radius + 0.25)) * bent;
+
+        vec3 color = vec3(0.002, 0.003, 0.011);
+        color += starField(bent * 0.52 + vec2(1.7, -0.4), ringBand(radius, photon * 1.9, 0.12));
+
+        float einstein = ringBand(radius, photon * 1.72, 0.018) * (0.45 + 0.55 * noise(vec2(angle * 18.0, time)));
+        color += vec3(0.55, 0.72, 1.0) * einstein * 0.35;
+
+        vec3 disk = accretionDisk(p, radius, angle);
+        float frontOcclusion = smoothstep(horizon * 0.72, horizon * 1.35, radius);
+        color += disk * frontOcclusion;
+
+        float photonRing = ringBand(radius, photon, 0.018) + ringBand(radius, photon * 1.07, 0.034) * 0.55;
+        float ringBreakup = 0.7 + 0.3 * fbm(vec2(angle * 9.0 - uTime * 0.25, radius * 32.0));
+        color += palette(0.94) * photonRing * ringBreakup * 1.9;
+
+        float shadow = 1.0 - smoothstep(horizon * 0.96, horizon * 1.18, radius);
+        float penumbra = 1.0 - smoothstep(horizon * 1.0, horizon * 1.85, radius);
+        color = mix(color, vec3(0.0), shadow);
+        color *= 1.0 - penumbra * 0.68;
+
+        float polarGlow = exp(-pow(abs(radius - horizon * 1.78) / 0.32, 2.0));
+        polarGlow *= 0.25 + 0.75 * smoothstep(0.2, 1.0, abs(sin(angle)));
+        color += vec3(0.22, 0.34, 0.62) * polarGlow * 0.08;
+
+        float vignette = smoothstep(1.7, 0.22, length(uv / vec2(uResolution.x / uResolution.y, 1.0)));
+        color *= 0.42 + vignette * 0.95;
+
+        color = color / (color + vec3(1.0));
+        color = pow(color, vec3(0.82));
+        gl_FragColor = vec4(color, 1.0);
+      }
+    `;
+
+    function compileShader(type, source) {
+      const shader = gl.createShader(type);
+      gl.shaderSource(shader, source);
+      gl.compileShader(shader);
+      if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+        throw new Error(gl.getShaderInfoLog(shader));
+      }
+      return shader;
+    }
+
+    const program = gl.createProgram();
+    gl.attachShader(program, compileShader(gl.VERTEX_SHADER, vertexSource));
+    gl.attachShader(program, compileShader(gl.FRAGMENT_SHADER, fragmentSource));
+    gl.linkProgram(program);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+      throw new Error(gl.getProgramInfoLog(program));
+    }
+
+    const buffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+      -1, -1,
+       1, -1,
+      -1,  1,
+      -1,  1,
+       1, -1,
+       1,  1
+    ]), gl.STATIC_DRAW);
+
+    gl.useProgram(program);
+    const position = gl.getAttribLocation(program, "position");
+    gl.enableVertexAttribArray(position);
+    gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
+
+    const uniforms = {
+      resolution: gl.getUniformLocation(program, "uResolution"),
+      pointer: gl.getUniformLocation(program, "uPointer"),
+      time: gl.getUniformLocation(program, "uTime"),
+      mass: gl.getUniformLocation(program, "uMass"),
+      spin: gl.getUniformLocation(program, "uSpin"),
+      tilt: gl.getUniformLocation(program, "uTilt"),
+      brightness: gl.getUniformLocation(program, "uBrightness")
+    };
+
+    const inputs = {
+      mass: document.getElementById("mass"),
+      spin: document.getElementById("spin"),
+      tilt: document.getElementById("tilt"),
+      brightness: document.getElementById("brightness")
+    };
+
+    const outputs = {
+      mass: document.getElementById("massValue"),
+      spin: document.getElementById("spinValue"),
+      tilt: document.getElementById("tiltValue"),
+      brightness: document.getElementById("brightnessValue")
+    };
+
+    const fps = document.getElementById("fps");
+    const pause = document.getElementById("pause");
+    const cinematic = document.getElementById("cinematic");
+
+    let dpr = 1;
+    let running = true;
+    let start = performance.now();
+    let pausedAt = 0;
+    let pointer = { x: 0, y: 0 };
+    let frameCount = 0;
+    let fpsTime = performance.now();
+
+    function resize() {
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const width = Math.floor(window.innerWidth * dpr);
+      const height = Math.floor(window.innerHeight * dpr);
+      if (canvas.width !== width || canvas.height !== height) {
+        canvas.width = width;
+        canvas.height = height;
+        gl.viewport(0, 0, width, height);
+      }
+    }
+
+    function updateReadouts() {
+      for (const key of Object.keys(inputs)) {
+        outputs[key].textContent = Number(inputs[key].value).toFixed(2);
+      }
+    }
+
+    for (const input of Object.values(inputs)) {
+      input.addEventListener("input", updateReadouts);
+    }
+
+    window.addEventListener("resize", resize);
+    window.addEventListener("pointermove", (event) => {
+      pointer.x = (event.clientX / window.innerWidth - 0.5) * 2;
+      pointer.y = (event.clientY / window.innerHeight - 0.5) * 2;
+    });
+
+    pause.addEventListener("click", () => {
+      running = !running;
+      pause.textContent = running ? "II" : ">";
+      if (running) {
+        start += performance.now() - pausedAt;
+        requestAnimationFrame(render);
+      } else {
+        pausedAt = performance.now();
+      }
+    });
+
+    cinematic.addEventListener("click", () => {
+      inputs.mass.value = "1.28";
+      inputs.spin.value = "0.86";
+      inputs.tilt.value = "0.74";
+      inputs.brightness.value = "1.42";
+      updateReadouts();
+    });
+
+    function render(now) {
+      resize();
+      const time = (now - start) / 1000;
+
+      gl.uniform2f(uniforms.resolution, canvas.width, canvas.height);
+      gl.uniform2f(uniforms.pointer, pointer.x, pointer.y);
+      gl.uniform1f(uniforms.time, time);
+      gl.uniform1f(uniforms.mass, Number(inputs.mass.value));
+      gl.uniform1f(uniforms.spin, Number(inputs.spin.value));
+      gl.uniform1f(uniforms.tilt, Number(inputs.tilt.value));
+      gl.uniform1f(uniforms.brightness, Number(inputs.brightness.value));
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+      frameCount++;
+      if (now - fpsTime > 500) {
+        const value = Math.round(frameCount * 1000 / (now - fpsTime));
+        fps.textContent = value + " fps";
+        frameCount = 0;
+        fpsTime = now;
+      }
+
+      if (running) {
+        requestAnimationFrame(render);
+      }
+    }
+
+    updateReadouts();
+    resize();
+    requestAnimationFrame(render);
+  </script>
+</body>
+</html>
